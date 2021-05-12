@@ -7,7 +7,7 @@
 const http=require('http')
 const url=require('url')
 const StringDecoder= require('string_decoder').StringDecoder; 
-
+const config= require('./config');
 
 //Create a server
 server= http.createServer((req,res)=>{
@@ -69,6 +69,9 @@ server= http.createServer((req,res)=>{
             //stringyfy the payload to return json string
             const payloadString= JSON.stringify(payload);
 
+            //Identify response as Json only
+            res.setHeader('Content-Type', 'application/json')
+
             //write the statuscode to res
             res.writeHead(statusCode);
             //Send the response since the stream has ended 
@@ -93,8 +96,10 @@ server= http.createServer((req,res)=>{
 })
 
 
-//Server will listen on port 3001
-server.listen(3001, ()=>{console.log('Server is running on port:3001')})
+//Server will listen on port config.port
+server.listen(config.port, ()=>{
+    console.log('Server is running on port:',config.port, 'in ',config.envName );
+});
 
 //Define hadlers for route requests
 let handlers= {};
