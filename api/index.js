@@ -10,6 +10,7 @@ const url=require('url')
 const StringDecoder= require('string_decoder').StringDecoder; 
 const config= require('./config');
 const fs =require('fs');
+const handlers=require('./lib/handlers')
 
 
 //Create a http server
@@ -87,16 +88,16 @@ const serverCore= (req,res)=>{
             };
     
             //call the chosen handler and send above data. Receive the data from callback of chosen handler
-            chosenHandler(data,(statusCode,payload)=>{
+            chosenHandler(data).then((handlerResponse)=>{
                 //get the status code called back by the handler or use default:200
-                statusCode=typeof(statusCode)=='number'?statusCode:200;
-    
+               const  statusCode=typeof(handlerResponse.statusCode)=='number'?handlerResponse.statusCode:200;
+
                 //get the payload called back by the handler or set default :{}
-                payload=typeof(payload)=='object'?payload:{};
-    
+                const payload=typeof(handlerResponse.payload)=='object'?handlerResponse.payload:{};
+
                 //stringyfy the payload to return json string
                 const payloadString= JSON.stringify(payload);
-    
+
                 //Identify response as Json only
                 res.setHeader('Content-Type', 'application/json')
     
@@ -105,28 +106,13 @@ const serverCore= (req,res)=>{
                 //Send the response since the stream has ended 
                 res.end(payloadString);
                 console.log('Returning this response: ', statusCode, payloadString);
-    
-            });
-    
-                        //Log the requst  path 
-                        //console.log(//'Request was received on path: ', pathName, 
-                        // ', Request method was: ', method, ', Query string parameters: ',queryStringObj,
-                        // ', Request headers are: ',headers,
-                       // ', Request recevced with this payload: ',buffer);
+            })
     
         })
     
 }
 
-//Define hadlers for route requests
-let handlers= {};
 
-handlers.ping =(data,callback)=>{
-    callback(200);
-}
-handlers.notFound = (data,callback)=>{
-    callback(404);
-}
 //define handlers for all the paths
 const router = {
     '/ping':handlers.ping
