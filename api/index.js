@@ -8,10 +8,10 @@ const http=require('http')
 const https=require('https')
 const url=require('url')
 const StringDecoder= require('string_decoder').StringDecoder; 
-const config= require('./config');
+const config= require('./lib/config');
 const fs =require('fs');
 const handlers=require('./lib/handlers')
-
+const helpers=require('./lib/helpers')
 
 //Create a http server
 const httpServer= http.createServer((req,res)=>{
@@ -76,7 +76,7 @@ const serverCore= (req,res)=>{
             buffer+=decoder.end();
     
             //select a chosen handler based on path name
-            console.log('Pathname is: ', pathName);
+            console.log('Buffer is: ', buffer);
             let chosenHandler= typeof(router[pathName])!=='undefined'?router[pathName]:handlers.notFound;
     
             //create data to be sent to chosen handler and handle data callback 
@@ -84,7 +84,9 @@ const serverCore= (req,res)=>{
                 'pathName':pathName,
                 'method':method,
                 'headers':headers,
-                'payload':buffer
+                'queryStringObj':queryStringObj,
+                'payload':buffer.length>0?helpers.parseJsonToObject(buffer):'',
+                
             };
     
             //call the chosen handler and send above data. Receive the data from callback of chosen handler
@@ -106,6 +108,25 @@ const serverCore= (req,res)=>{
                 //Send the response since the stream has ended 
                 res.end(payloadString);
                 console.log('Returning this response: ', statusCode, payloadString);
+            }).catch((err)=>{
+
+                 //get the status code called back by the handler or use default:200
+               const  statusCode=400;
+
+               //get the payload called back by the handler or set default :{}
+               const payload=err;
+
+               //stringyfy the payload to return json string
+               const payloadString= JSON.stringify(payload);
+
+               //Identify response as Json only
+               res.setHeader('Content-Type', 'application/json')
+   
+               //write the statuscode to res
+               res.writeHead(statusCode);
+               //Send the response since the stream has ended 
+               res.end(payloadString);
+               console.log('Returning this response: ', statusCode, payloadString);
             })
     
         })
@@ -115,5 +136,6 @@ const serverCore= (req,res)=>{
 
 //define handlers for all the paths
 const router = {
-    '/ping':handlers.ping
+    '/ping':handlers.ping,
+    '/users':handlers.users
 }

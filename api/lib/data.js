@@ -5,7 +5,7 @@
 
 const fs= require('fs')
 const path= require('path')
-
+const helpers= require('./helpers')
 //Will export this 
 const lib={};
 
@@ -14,24 +14,32 @@ lib.baseDir= path.join(__dirname, '/../.data/');
 //create and add data to a file
 lib.create= (dir,file,data)=>{
     const absFilePath=`${lib.baseDir}${dir}/${file}.json`;
-    fs.promises.open(absFilePath,'wx').then((filedescriptor)=>{
+    return new Promise ((resolve,reject)=>{
+        fs.promises.open(absFilePath,'wx').then((filedescriptor)=>{
 
-        //convert data to a string and write data to the file
-        const stringData=JSON.stringify(data);
-
-        //Write string data to file
-        fs.promises.writeFile(filedescriptor,stringData).then(()=>{
-
-            filedescriptor.close().then(()=>{
-                console.log(`File closed: ${absFilePath}`);
+            //convert data to a string and write data to the file
+            const stringData=JSON.stringify(data);
+    
+            //Write string data to file
+            fs.promises.writeFile(filedescriptor,stringData).then(()=>{
+    
+                filedescriptor.close().then(()=>{
+                    console.log(`File closed: ${absFilePath}`);
+                    resolve();
+                }).catch((err)=>{
+                    console.log(`Error closing file: ${absFilePath}`)
+                    reject(err);
+                })
+    
             }).catch((err)=>{
-                console.log(`Error closing file: ${absFilePath}`)
+                console.log(`Error writing file, the error is: ${err} `)
+                reject(err);
             })
-
-        }).catch((err)=>{console.log(`Error writing file: ${absFilePath}, the error is: ${err} `)})
-
-    }).catch((err)=>
-        {console.log(`Error opening file:${absFilePath}, the error is ${err}`)
+    
+        }).catch((err)=>{
+            console.log(`Error opening file, the error is ${err}`)
+            reject(err);
+        })
     })
 
 }
@@ -43,7 +51,7 @@ lib.read=(dir,file)=>{
 
     return new Promise((resolve,reject)=>{
         fs.promises.readFile(absFilePath,'utf8').then((data)=>{
-            resolve (data); 
+            resolve (helpers.parseJsonToObject(data)); 
         }).catch((err)=>{
             reject(err)
         })
@@ -62,22 +70,22 @@ lib.update=(dir,file,data)=>{
                 fs.promises.writeFile(fileHandler,stringData).then(()=>{
                     fileHandler.close().then(()=>{
                         console.log(`File closed: ${absFilePath}`);
-                        resolve();
+                        resolve(data);
                     }).catch((err)=>{
                         console.log(`Error closing file: ${absFilePath}`)
-                        reject()
+                        reject(err)
                     })
                 }).catch((err)=>{
                     console.log(`Error writing file: ${absFilePath}, the error is: ${err} `);
-                    reject()
+                    reject(err)
                 })
             }).catch((err)=>{
                 console.log(`Error truncating file:${absFilePath}, the error is: ${err} `)
-                reject()
+                reject(err)
             })
         }).catch((err)=>{
             console.log(`Error opening file:${absFilePath}, the error is: ${err}`);
-            reject();
+            reject(err);
         })
     })
 }
