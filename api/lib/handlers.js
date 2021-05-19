@@ -7,6 +7,7 @@
 //Dependencies
 const helpers= require('./helpers')
 const _data= require('./data')
+const crypto = require('crypto')
 
 //Define hadlers for route requests
 const handlers= {};
@@ -45,6 +46,37 @@ handlers.ping= (data)=>{
             reject();
         }
     });
+}
+
+//*********User handler */
+handlers.users=(data)=>{
+    return new Promise((resolve,reject)=>{
+        if(handlers.validMethods.includes(data.method)){
+            handlers._user[data.method](data).then((response)=>{
+                const responseData= {
+                    statusCode: 200,
+                    payload: response
+                }
+                resolve(responseData);
+            }).catch((err)=>{
+                const responseData= {
+                    statusCode: 400,
+                    payload: {message: err}
+                }
+                reject(responseData);
+            })
+
+        }
+
+        else{
+            const responseData= {
+                statusCode: 405,
+                payload: {message: 'Bad Request'}
+            }
+            resolve(responseData);
+        }
+
+    })
 }
 
 //Define a set of users helpers for different methods.
@@ -111,30 +143,59 @@ handlers._user.get= (data)=>{
 
         const userPhone=data.queryStringObj.get('phone');
         const phone= typeof(userPhone)=='string' && userPhone.length==10?userPhone:false;
-        if(phone){
-            _data.read('user',phone).then((userData)=>{
-                delete userData.password;
-                const responseData= {
-                    statusCode: 200,
-                    payload: userData
+
+        //get the token from the header
+        const token= typeof(data.headers.token)==='string'?data.headers.token:false;
+        //verify the tiken if valid user
+
+        if(token){
+            handlers._token.verifyToken(token,phone).then((response)=>{
+                if(response){
+                    if(phone){
+                        _data.read('user',phone).then((userData)=>{
+                            delete userData.password;
+                            const responseData= {
+                                statusCode: 200,
+                                payload: userData
+                            }
+                            resolve(responseData)
+                        }).catch((err)=>{
+                            const responseData= {
+                                statusCode: 400,
+                                payload: err
+                            }
+                            reject(responseData)
+                        })
+                       
+                    }
+                    else{
+                        const responseData= {
+                            statusCode: 400,
+                            payload: {message: `Invalid phone number`}
+                        }
+                        reject(responseData)
+                    }
                 }
-                resolve(responseData)
-            }).catch((err)=>{
-                const responseData= {
-                    statusCode: 400,
-                    payload: err
+                else{
+                    const responseData= {
+                        statusCode: 400,
+                        payload: {message: `Invalid Token`}
+                    }
+                    reject(responseData)
+    
                 }
-                reject(responseData)
             })
-           
         }
         else{
             const responseData= {
                 statusCode: 400,
-                payload: {message: `Invalid phone number`}
+                payload: {message: `Invalid Token`}
             }
             reject(responseData)
+
         }
+
+        
      
     })
 }
@@ -246,10 +307,14 @@ handlers._user.delete= (data)=>{
     })
 }
 
-handlers.users=(data)=>{
+//*********User handler END */
+
+
+//*********token handler*/
+handlers.tokens=(data)=>{
     return new Promise((resolve,reject)=>{
         if(handlers.validMethods.includes(data.method)){
-            handlers._user[data.method](data).then((response)=>{
+            handlers._token[data.method](data).then((response)=>{
                 const responseData= {
                     statusCode: 200,
                     payload: response
@@ -275,6 +340,234 @@ handlers.users=(data)=>{
 
     })
 }
+
+//token handler helper functions
+
+handlers._token= {}
+
+handlers._token.post =(data)=>{
+    return new Promise((resolve, reject)=>{
+        let {phone, password}= data.payload;
+        phone= typeof(phone)=='string' && phone.trim().length==10?phone:false;
+        password= typeof(password)=='string' && password.trim().length>0?password:false;
+
+        if(phone && password){
+            //check if user exists 
+            _data.read('user',phone).then((userData)=>{
+                //check if user password is correct
+                const hashedInputPassword= helpers.hash(password);
+                if(hashedInputPassword===userData.password){
+                    //user is valid, create a token object 
+                    const tokenObject = {
+                        tokenID:crypto.randomUUID(),
+                        phone,
+                        expires:Date.now()+1000*60*60
+                    }
+                    //store the token in our 'database'
+                    _data.create('token',tokenObject.tokenID,tokenObject).then((userToken)=>{
+                        //token created, return the token to user
+                        resolve(userToken);
+
+                    }).catch((err)=>{
+                        const responseData= {
+                            statusCode: 400,
+                            payload: {message: 'Error creating user token'}
+                        }
+                        reject(responseData); 
+                    })
+                }
+                else{
+                    const responseData= {
+                        statusCode: 400,
+                        payload: {message: 'Incorrect password!'}
+                    }
+                    reject(responseData); 
+                }
+            }).catch((err)=>{
+                const responseData= {
+                    statusCode: 400,
+                    payload: {message: `User does not exist! or the erros is ${err}`}
+                }
+                reject(responseData);    
+            })
+        }
+        else{
+            const responseData= {
+                statusCode: 400,
+                payload: {message: 'Invalid phone or password'}
+            }
+            reject(responseData);   
+        }
+    })
+}
+
+//Required Data: tokenId 
+
+handlers._token.get= (data)=>{
+    return new Promise((resolve, reject)=>{
+
+       
+
+        const id=data.queryStringObj.get('id');
+        const tokenId= typeof(id)=='string' && id.trim().length===36?id:false;
+
+        console.log('Data reveived is: ', tokenId)
+        if(tokenId){
+            _data.read('token',tokenId).then((tokenData)=>{
+                const responseData= {
+                    statusCode: 200,
+                    payload: tokenData
+                }
+                resolve(responseData)
+            }).catch((err)=>{
+                const responseData= {
+                    statusCode: 400,
+                    payload: err
+                }
+                reject(responseData)
+            })
+           
+        }
+        else{
+            const responseData= {
+                statusCode: 400,
+                payload: {message: `Invalid phone number`}
+            }
+            reject(responseData)
+        }
+     
+    })
+}
+
+
+//Required: tokemID & extend boolean
+handlers._token.put= (data)=>{
+    return new Promise((resolve, reject)=>{
+
+        let {tokenID, extend}= data.payload;
+
+        tokenID= typeof(tokenID)=='string' && tokenID.trim().length==36?tokenID:false;
+        extend=typeof(extend)=='boolean' && extend==true?extend:false;
+
+        console.log('Token and extend is: ',tokenID,extend )
+        if(tokenID && extend){
+            console.log('Insie the put and phone is: ', tokenID);
+            _data.read('token',tokenID).then((tokenData)=>{
+                //token exists
+                if(tokenData.expires > Date.now()){
+                
+                tokenData.expires= tokenData.expires + 1000*60*60;
+                
+                 //persist the updated token
+                _data.update('token',tokenID,tokenData).then((response)=>{
+
+                    const responseData= {
+                        statusCode: 200,
+                        response,
+                        messagae:'Token extended by 1 hour'
+                    }
+                    resolve(responseData);
+                })
+                }
+                else{
+                    const responseData= {
+                        statusCode: 400,
+                        message: 'Cant extend, token already expired!'
+                    }
+                    reject(responseData);
+                }
+
+
+            }).catch((err)=>{
+                //data is not present
+                const responseData= {
+                statusCode: 400,
+                payload: {message: `Cant extend token ${err}`}
+                }
+            reject(responseData)
+            })
+
+            
+        }
+
+        else{
+            const responseData= {
+                statusCode: 400,
+                payload: {message: `Invalid phone number`}
+            }
+            reject(responseData)
+        }
+
+       
+    })
+}
+
+//Required: tokenID
+handlers._token.delete= (data)=>{
+    return new Promise((resolve, reject)=>{
+    
+
+        let tokenID=data.queryStringObj.get('tokenID');
+        console.log('Data reveived is11: ',tokenID)
+        tokenID= typeof(tokenID)=='string' && tokenID.trim().length===36?tokenID:false;
+
+        console.log('Data reveived is: ',tokenID)
+        if(tokenID){
+            _data.read('token',tokenID).then((responseToken)=>{
+                //user exists delete now
+                _data.delete('token',tokenID).then(()=>{
+                    const responseData= {
+                        statusCode: 200,
+                        message:'deleted the tokem'
+                    }
+                    resolve(responseData);
+                }).catch((err)=>{
+                    const responseData= {
+                        statusCode: 400,
+                        message: 'Couldnt delete token'
+                    }
+                    reject(responseData)
+                })
+            }).catch((err)=>{
+                const responseData= {
+                    statusCode: 400,
+                    payload: {message: `Couldnt get token`}
+                }
+                reject(responseData)
+            })
+     
+        }
+        else{
+            const responseData= {
+                statusCode: 400,
+                payload: {message: `Invalid phone number`}
+            }
+            reject(responseData)
+        }
+        
+    })
+}
+
+//to verify the token
+
+handlers._token.verifyToken = (tokenID,phone)=>{
+    return new Promise ((resolve, reject)=>{
+        _data.read('token',tokenID).then((tokenData)=>{
+            if(tokenData.phone===phone && tokenData.expires>Date.now() ){
+                //the user has a valid token
+                resolve(true)
+            }
+            else{
+                resolve(false)
+            }
+        }).catch((err)=>{
+            console.log('Some other error: ', err)
+            resolve(false)
+        })
+    })
+}
+
+//*********token handler END*/
 
 //Export the handlers
 module.exports=handlers;

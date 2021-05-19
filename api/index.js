@@ -137,5 +137,6 @@ const serverCore= (req,res)=>{
 //define handlers for all the paths
 const router = {
     '/ping':handlers.ping,
-    '/users':handlers.users
+    '/users':handlers.users,
+    '/tokens':handlers.tokens
 }

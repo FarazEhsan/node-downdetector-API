@@ -25,7 +25,7 @@ lib.create= (dir,file,data)=>{
     
                 filedescriptor.close().then(()=>{
                     console.log(`File closed: ${absFilePath}`);
-                    resolve();
+                    resolve(data);
                 }).catch((err)=>{
                     console.log(`Error closing file: ${absFilePath}`)
                     reject(err);
