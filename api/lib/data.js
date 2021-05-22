@@ -46,7 +46,7 @@ lib.create= (dir,file,data)=>{
 
 //Read data from a file
 //A promise to return data
-lib.read=(dir,file)=>{
+lib.read=async (dir,file)=>{
     const absFilePath=`${lib.baseDir}${dir}/${file}.json`;
 
     return new Promise((resolve,reject)=>{

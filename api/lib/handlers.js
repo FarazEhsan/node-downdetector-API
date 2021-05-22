@@ -8,6 +8,7 @@
 const helpers= require('./helpers')
 const _data= require('./data')
 const crypto = require('crypto')
+const config= require('./config')
 
 //Define hadlers for route requests
 const handlers= {};
@@ -548,6 +549,7 @@ handlers._token.delete= (data)=>{
     })
 }
 
+
 //to verify the token
 
 handlers._token.verifyToken = (tokenID,phone)=>{
@@ -568,6 +570,145 @@ handlers._token.verifyToken = (tokenID,phone)=>{
 }
 
 //*********token handler END*/
+
+//***** checks handler begins */
+
+
+/*
+*
+*Check API handlers
+*Authenticated users will create checks. Each check will be stored in a file with user ID and User will have an array of
+*checks sotred in its object
+*/
+
+
+handlers.checks=(data)=>{
+    return new Promise((resolve,reject)=>{
+        if(handlers.validMethods.includes(data.method)){
+            handlers._checks[data.method](data).then((response)=>{
+                const responseData= {
+                    statusCode: 200,
+                    payload: response
+                }
+                resolve(responseData);
+            }).catch((err)=>{
+                console.log('Error calling provate methof', err)
+                const responseData= {
+                    statusCode: 400,
+                    payload: 'invlaid method'
+                }
+                reject(responseData);
+            })
+
+        }
+
+        else{
+            const responseData= {
+                statusCode: 405,
+                payload: {message: 'Bad Request'}
+            }
+            resolve(responseData);
+        }
+
+    })
+}
+
+//***checks GET,POST,PUT& DELETE methods */
+
+/*
+*Check Post: Create a check if user is authenticated (has a toke in header), 
+*REQUIRED: tokenID, 
+*/
+
+handlers._checks ={}
+
+handlers._checks.post= async (data)=>{
+    let {url, method, protocol, timeOut, successCode}= data.payload;
+    let token= data.headers.token;
+    url= typeof(url)=='string' && url.trim().length>0?url:false;
+    method= typeof(method)=='string' && handlers.validMethods.includes(method)?method:false;
+    protocol= typeof(protocol)=='string' && ['http','https'].includes(protocol)?protocol:false;
+    timeOut= typeof(timeOut)=='number' && timeOut>0?timeOut:false;
+    successCode=typeof(successCode)=='object' && successCode instanceof Array?successCode:false;
+
+    if(url && method && protocol && timeOut && successCode){
+        let userPhone=''
+        try{
+            try{
+                const tokenCheck=await _data.read('token',token);   
+                userPhone=tokenCheck.phone;
+            }
+            catch(err){
+                return 403; 
+            }
+    
+            //get user checks from user data 
+            const userData=await _data.read('user',userPhone);
+            let userChecks= typeof(userData.checks)=='object' && userData.checks instanceof Array? userData.checks:[];
+    
+            if(userChecks.length < config.maxChecks){
+                //user can create a new check
+    
+                const id= crypto.randomUUID();
+                const checkData={
+                    id,
+                    url,
+                    method,
+                    protocol,
+                    timeOut,
+                    successCode,
+                    userPhone,
+                }
+                console.log('Check data is: ', checkData);
+                try{
+                    userData.checks=userChecks;
+                    userData.checks.push(checkData.id);
+                    const updateUserChecks= await _data.update('user',userPhone,userData);
+                    const createCheck= await _data.create('checks',checkData.id,checkData);
+                    return createCheck;
+                }
+                catch(err){
+                    console.log('Error adding cehcks to user: ',err);
+                    const responseData= {
+                        status: 400,
+                         err
+                    }
+                    return responseData;
+        
+                }
+     
+    
+            }
+            else{
+                const responseData= {
+                    status: 400,
+                    message: `User us allowed only ${config.maxChecks} checks at a time`
+                }
+    
+                return responseData;
+            }
+    
+        }
+        catch(err){
+            console.log('Error in checks post: ',err)
+            const responseData= {
+                status: 500,
+                message: 'Internal Server Error'
+            }
+
+            return responseData;
+        }
+    }
+    else{
+        const responseData= {
+            status: 400,
+            message: `Invalid parameters`
+        }
+
+        return responseData;
+    }
+}
+//***** checks handler END */
 
 //Export the handlers
 module.exports=handlers;
